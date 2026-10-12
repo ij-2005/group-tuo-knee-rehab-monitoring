@@ -1,0 +1,16 @@
+# OS cruft
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Node (for when you add tooling later)
+node_modules/
+npm-debug.log*
+
+# Logs / env
+*.log
+.env
