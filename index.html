@@ -3,20 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Knee Rehab Monitoring — v1 Prototype</title>
+  <title>Knee Rehab Monitoring — v2 Prototype</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="app">
     <h1 class="app__title">Knee Rehab Monitoring System</h1>
-    <p class="app__subtitle">v1 Prototype — Webcam Access - VERSION 1.0</p>
+    <p class="app__subtitle">v2 Prototype — Pose Landmarks - VERSION 2.0</p>
 
     <!-- Hidden video: holds the raw MediaStream. Never shown to the user. -->
     <video id="sourceVideo" playsinline muted></video>
 
     <!-- Visible canvas: square viewport. Frames are drawn here. -->
     <div class="stage">
-      <canvas id="stageCanvas" width="480" height="480"></canvas>
+      <canvas id="stageCanvas" width="640" height="640"></canvas>
       <div id="stageMessage" class="stage__message">Camera is off</div>
     </div>
 
@@ -26,8 +26,9 @@
     </div>
 
     <p id="status" class="status" role="status" aria-live="polite"></p>
+    <p id="mpStatus" class="mp-status" role="status" aria-live="polite"></p>
   </main>
 
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 </html>
