@@ -16,6 +16,6 @@ Then visit http://localhost:8000
 ## Roadmap
 
 - [x] v1 — Webcam open/close, square center-cropped canvas
-- [ ] v2 — MediaPipe Pose landmark detection + overlay
+- [x] v2 — MediaPipe Pose landmark detection + overlay
 - [ ] v3 — Knee angle calculation + real-time feedback
 - [ ] v4 — Progress tracking + benchmarking evaluation
