@@ -3,185 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Knee Rehab Monitoring System</title>
+  <title>Knee Rehab Monitoring — v3 Prototype</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body class="landing-body">
+<body>
+  <main class="app">
+    <h1 class="app__title">Knee Rehab Monitoring System</h1>
+    <p class="app__subtitle">v3 Prototype — Pose Landmarks - VERSION 3.0</p>
 
-  <!-- ============ HEADER ============ -->
-  <header class="site-header">
-    <div class="site-header__inner">
-      <a href="index.html" class="site-header__brand">
-        <span class="site-header__mark" aria-hidden="true">
-          <svg viewBox="0 0 32 32" width="28" height="28">
-            <circle cx="16" cy="16" r="15" fill="#00703C" />
-            <path d="M10 20 C 12 12, 20 12, 22 20" stroke="#F2A900" stroke-width="2.5"
-                  fill="none" stroke-linecap="round" />
-            <circle cx="10" cy="20" r="2" fill="#fff" />
-            <circle cx="22" cy="20" r="2" fill="#fff" />
-          </svg>
-        </span>
-        <span class="site-header__name">Knee Rehab Monitoring</span>
-      </a>
-      <nav class="site-header__nav">
-        <a href="#how-it-works">How it works</a>
-        <a href="#exercises">Exercises</a>
-        <a href="#faq">FAQ</a>
-      </nav>
-    </div>
-  </header>
+    <!-- Hidden video: holds the raw MediaStream. Never shown to the user. -->
+    <video id="sourceVideo" playsinline muted></video>
 
-  <!-- ============ HERO ============ -->
-  <section class="hero">
-    <div class="hero__inner">
-      <p class="hero__eyebrow">AI-Powered Knee Rehabilitation</p>
-      <h1 class="hero__title">
-        Your browser becomes your<br />
-        <span class="hero__title-accent">rehab assistant.</span>
-      </h1>
-      <p class="hero__lede">
-        Real-time form checks for knee rehabilitation exercises — using just
-        your webcam. No wearables, no clinic visit, no video uploaded anywhere.
-      </p>
-      <a href="login.html" class="btn btn--primary btn--lg">
-        Start Exercise Session
-      </a>
-      <p class="hero__note">Free · Runs entirely in your browser · GroupTUO</p>
-    </div>
-  </section>
-
-  <!-- ============ HOW IT WORKS ============ -->
-  <section class="section" id="how-it-works">
-    <div class="section__inner">
-      <h2 class="section__title">How it works</h2>
-      <p class="section__lede">Four steps from opening the page to completing a session.</p>
-
-      <ol class="steps">
-        <li class="step">
-          <div class="step__num">1</div>
-          <h3 class="step__title">Position yourself</h3>
-          <p class="step__text">Stand 1–2 meters from your camera with your full lower body in view.</p>
-        </li>
-        <li class="step">
-          <div class="step__num">2</div>
-          <h3 class="step__title">Perform the exercise</h3>
-          <p class="step__text">Squat, sit-to-stand, or knee flexion — at your own pace, in your own home.</p>
-        </li>
-        <li class="step">
-          <div class="step__num">3</div>
-          <h3 class="step__title">Get real-time feedback</h3>
-          <p class="step__text">The system tracks your knee joints and measures your range of motion as you move.</p>
-        </li>
-        <li class="step">
-          <div class="step__num">4</div>
-          <h3 class="step__title">Review your progress</h3>
-          <p class="step__text">See your session summary and track improvement over time. (Coming soon)</p>
-        </li>
-      </ol>
-    </div>
-  </section>
-
-  <!-- ============ EXERCISES ============ -->
-  <section class="section section--alt" id="exercises">
-    <div class="section__inner">
-      <h2 class="section__title">Supported exercises</h2>
-      <p class="section__lede">Each exercise targets a different aspect of knee rehabilitation.</p>
-
-      <div class="cards">
-        <!-- Squats -->
-        <article class="card">
-          <div class="card__icon" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="56" height="56">
-              <circle cx="32" cy="12" r="6" fill="#00703C" />
-              <path d="M32 18 L32 34 M32 34 L22 42 L22 54 M32 34 L42 42 L42 54"
-                    stroke="#00703C" stroke-width="4" stroke-linecap="round"
-                    stroke-linejoin="round" fill="none" />
-              <path d="M18 54 L26 54 M38 54 L46 54"
-                    stroke="#F2A900" stroke-width="4" stroke-linecap="round" />
-            </svg>
-          </div>
-          <h3 class="card__title">Squats</h3>
-          <p class="card__text">
-            Strengthens quadriceps and glutes — the core muscles that support
-            the knee during everyday movement.
-          </p>
-        </article>
-
-        <!-- Sit-to-Stand -->
-        <article class="card">
-          <div class="card__icon" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="56" height="56">
-              <circle cx="24" cy="12" r="6" fill="#00703C" />
-              <path d="M24 18 L24 34 M24 34 L34 34 L34 46 M34 46 L34 54 M24 34 L16 34"
-                    stroke="#00703C" stroke-width="4" stroke-linecap="round"
-                    stroke-linejoin="round" fill="none" />
-              <path d="M44 42 L52 42 L52 54 M44 54 L52 54"
-                    stroke="#F2A900" stroke-width="3" stroke-linecap="round"
-                    fill="none" />
-            </svg>
-          </div>
-          <h3 class="card__title">Sit-to-Stand</h3>
-          <p class="card__text">
-            Trains the functional transition from sitting to standing — a
-            motion essential for daily independence.
-          </p>
-        </article>
-
-        <!-- Knee Flexion -->
-        <article class="card">
-          <div class="card__icon" aria-hidden="true">
-            <svg viewBox="0 0 64 64" width="56" height="56">
-              <circle cx="20" cy="12" r="6" fill="#00703C" />
-              <path d="M20 18 L20 34 M20 34 L34 34 M34 34 L48 34"
-                    stroke="#00703C" stroke-width="4" stroke-linecap="round"
-                    stroke-linejoin="round" fill="none" />
-              <path d="M34 34 L34 48 M34 48 L42 54"
-                    stroke="#F2A900" stroke-width="4" stroke-linecap="round"
-                    stroke-linejoin="round" fill="none" />
-            </svg>
-          </div>
-          <h3 class="card__title">Knee Flexion</h3>
-          <p class="card__text">
-            Restores range of motion by gently bending the knee — a
-            foundational step in most rehabilitation programs.
-          </p>
-        </article>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ WHO IS THIS FOR ============ -->
-  <section class="section" id="who-for">
-    <div class="section__inner">
-      <h2 class="section__title">Who is this for?</h2>
-      <p class="section__lede">
-        Built for anyone who needs to practice knee rehabilitation exercises —
-        especially those without regular access to a therapist.
-      </p>
-
-      <div class="audience">
-        <div class="audience__item">
-          <h3 class="audience__title">Patients recovering at home</h3>
-          <p class="audience__text">
-            People prescribed knee exercises who want to practice correctly
-            between clinic visits — without guessing whether their form is right.
-          </p>
-        </div>
-        <div class="audience__item">
-          <h3 class="audience__title">Older adults with limited mobility</h3>
-          <p class="audience__text">
-            Individuals managing knee pain or stiffness who find traveling to a
-            clinic difficult, and want guided practice from home.
-          </p>
-        </div>
-        <div class="audience__item">
-          <h3 class="audience__title">Small clinics with limited resources</h3>
-          <p class="audience__text">
-            Rehabilitation practices that want a low-cost tool to extend
-            guidance to patients between in-person sessions.
-          </p>
-        </div>
-      </div>
+    <!-- Visible canvas: square viewport. Frames are drawn here. -->
+    <div class="stage">
+      <canvas id="stageCanvas" width="640" height="640"></canvas>
+      <div id="stageMessage" class="stage__message">Camera is off</div>
     </div>
   </section>
 
