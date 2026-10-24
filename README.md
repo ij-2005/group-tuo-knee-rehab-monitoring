@@ -11,20 +11,3 @@ medical device**, and it does not diagnose, treat, or replace professional
 medical advice.
 
 ---
-
-## Status
-
-**v2.5 — Landing page**
-
-| Version | Focus | Status |
-|---------|-------|--------|
-| v1 | Webcam access, square canvas | ✅ Done |
-| v2 | MediaPipe Pose, lower-body landmark overlay | ✅ Done |
-| v2.5 | Landing page, DLSU-inspired design system | ✅ Done (this version) |
-| v3 | Login / session (IA demonstration) | 🔜 Next |
-| v4 | Knee angle calculation + live feedback | Planned |
-| v5 | Progress tracking + benchmarking evaluation | Planned |
-
----
-
-## Project Structure
