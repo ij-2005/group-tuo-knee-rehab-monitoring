@@ -1,298 +1,722 @@
-// ---------------------------------------------------------------------------
-// Knee Rehab Monitoring System — v2 Prototype
-// Webcam + MediaPipe PoseLandmarker (lower-body landmarks only)
-// ---------------------------------------------------------------------------
+import {
+      FilesetResolver,
+      PoseLandmarker
+    } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/vision_bundle.mjs";
 
-import { FilesetResolver, PoseLandmarker } from
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.12/vision_bundle.mjs";
+    // ------------------------------------------------------------
+    // CONFIGURATION
+    // ------------------------------------------------------------
 
-// --- MediaPipe version (keep in sync with the import above) ---------------
-const MP_VERSION = "0.10.12";
+    const MP_VERSION = "0.10.12";
 
-// --- DOM handles -----------------------------------------------------------
+    const MODEL_URL =
+      "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 
-const sourceVideo = document.getElementById("sourceVideo");
-const stageCanvas = document.getElementById("stageCanvas");
-const stageMessage = document.getElementById("stageMessage");
-const openBtn = document.getElementById("openBtn");
-const closeBtn = document.getElementById("closeBtn");
-const statusEl = document.getElementById("status");
-const mpStatusEl = document.getElementById("mpStatus");
+    const SQUAT_DOWN_ANGLE = 120;
+    const STAND_UP_ANGLE = 165;
 
-const ctx = stageCanvas.getContext("2d");
+    // Exponential smoothing: higher = smoother but slower.
+    const SMOOTHING = 0.7;
 
-// --- State -----------------------------------------------------------------
+    // Minimum landmark visibility for angle calculations.
+    const MIN_VISIBILITY = 0.5;
 
-let stream = null;            // active MediaStream
-let rafId = null;             // requestAnimationFrame handle
-let poseLandmarker = null;    // MediaPipe PoseLandmarker instance
-let lastVideoTime = -1;       // last processed video timestamp
-let modelReady = false;       // true once the model has loaded once
+    // ------------------------------------------------------------
+    // DOM ELEMENTS
+    // ------------------------------------------------------------
 
-// --- Lower-body landmark definitions --------------------------------------
-// BlazePose indices: 23=L hip, 24=R hip, 25=L knee, 26=R knee,
-// 27=L ankle, 28=R ankle, 29=L heel, 30=R heel, 31=L foot, 32=R foot.
+    const sourceVideo = document.getElementById("sourceVideo");
+    const stageCanvas = document.getElementById("stageCanvas");
+    const stageMessage = document.getElementById("stageMessage");
 
-const LOWER_BODY_INDICES = [23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+    const openBtn = document.getElementById("openBtn");
+    const closeBtn = document.getElementById("closeBtn");
 
-const LOWER_BODY_CONNECTIONS = [
-  [23, 25], [25, 27], [27, 29], [29, 31],   // left leg
-  [24, 26], [26, 28], [28, 30], [30, 32],   // right leg
-  [23, 24],                                 // hip line
-  [25, 26],                                 // knee line
-  [27, 28],                                 // ankle line
-  [29, 30],                                 // heel line
-  [31, 32],                                 // foot line
-];
+    const statusEl = document.getElementById("status");
+    const mpStatusEl = document.getElementById("mpStatus");
 
-// --- UI helpers ------------------------------------------------------------
+    const ctx = stageCanvas.getContext("2d");
 
-function setStatus(message, isError = false) {
-  statusEl.textContent = message;
-  statusEl.classList.toggle("is-error", isError);
-}
+    // ------------------------------------------------------------
+    // STATE
+    // ------------------------------------------------------------
 
-function setMpStatus(message) {
-  mpStatusEl.textContent = message;
-}
+    let stream = null;
+    let rafId = null;
+    let poseLandmarker = null;
 
-function setCameraUi(isOn) {
-  openBtn.disabled = isOn;
-  closeBtn.disabled = !isOn;
-  stageMessage.classList.toggle("is-hidden", isOn);
-}
+    let modelReady = false;
+    let cameraStarting = false;
+    let cameraSession = 0;
 
-// --- MediaPipe initialization ---------------------------------------------
+    let lastVideoTime = -1;
+    let latestLandmarks = null;
 
-async function initPoseLandmarker() {
-  if (poseLandmarker) return poseLandmarker;
+    let previousPoints = {};
 
-  const vision = await FilesetResolver.forVisionTasks(
-    `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`
-  );
+    let squatCount = 0;
+    let squatState = "UP";
 
-  poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-    baseOptions: {
-      modelAssetPath:
-        "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
-      delegate: "GPU",
-    },
-    runningMode: "VIDEO",
-    numPoses: 1,
-    minPoseDetectionConfidence: 0.5,
-    minPosePresenceConfidence: 0.5,
-    minTrackingConfidence: 0.5,
-  });
+    let leftKneeAngle = null;
+    let rightKneeAngle = null;
 
-  return poseLandmarker;
-}
+    let downFrames = 0;
+    let upFrames = 0;
 
-// --- Landmark drawing ------------------------------------------------------
+    // Require several consecutive valid frames before changing state.
+    const REQUIRED_FRAMES = 3;
 
-/**
- * Draw lower-body landmarks on the (already mirrored) canvas.
- *
- * MediaPipe returns normalized coords in [0,1] relative to the *source*
- * video frame. Because we draw the video mirrored, we flip x here too so
- * the skeleton lines up with what the user sees.
- */
-function drawLowerBody(landmarks, cw, ch, vw, vh, sx, sy, srcW, srcH) {
-  if (!landmarks || landmarks.length === 0) return;
+    // BlazePose landmark indices.
+    const LOWER_BODY_INDICES = [
+      23, 24, 25, 26, 27, 28, 29, 30, 31, 32
+    ];
 
-  const lm = landmarks[0];
+    const LOWER_BODY_CONNECTIONS = [
+      [23, 25],
+      [25, 27],
+      [24, 26],
+      [26, 28],
+      [23, 24],
+      [25, 26],
+      [27, 28],
+      [27, 29],
+      [28, 30],
+      [29, 31],
+      [30, 32]
+    ];
 
-  // MediaPipe returns normalized [0,1] coords relative to the FULL video
-  // frame. Convert to video pixels, then to canvas pixels through the
-  // same crop window the video was drawn with.
-  const getPoint = (i) => {
-    const vx = lm[i].x * vw;   // video pixel x
-    const vy = lm[i].y * vh;   // video pixel y
+    // ------------------------------------------------------------
+    // UI HELPERS
+    // ------------------------------------------------------------
 
-    // Position inside the cropped source rect, normalized to [0,1].
-    const u = (vx - sx) / srcW;
-    const v = (vy - sy) / srcH;
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle("is-error", isError);
+    }
 
-    // Mirror horizontally to match the flipped canvas, then scale to
-    // canvas dimensions.
-    return {
-      x: (1 - u) * cw,
-      y: v * ch,
-    };
-  };
+    function setMpStatus(message, isError = false) {
+      mpStatusEl.textContent = message;
+      mpStatusEl.classList.toggle("is-error", isError);
+    }
 
-  // Connections
-  ctx.strokeStyle = "#00ff88";
-  ctx.lineWidth = 4;
-  ctx.lineCap = "round";
-  for (const [i, j] of LOWER_BODY_CONNECTIONS) {
-    const p1 = getPoint(i);
-    const p2 = getPoint(j);
-    ctx.beginPath();
-    ctx.moveTo(p1.x, p1.y);
-    ctx.lineTo(p2.x, p2.y);
-    ctx.stroke();
-  }
+    function setCameraUi(isOn) {
+      openBtn.disabled = isOn || cameraStarting;
+      closeBtn.disabled = !isOn && !cameraStarting;
 
-  // Joints
-  for (const i of LOWER_BODY_INDICES) {
-    const p = getPoint(i);
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 8, 0, 2 * Math.PI);
-    ctx.fillStyle = "#ff3366";
-    ctx.fill();
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.stroke();
-  }
-}
+      stageMessage.classList.toggle("is-hidden", isOn);
+    }
 
-// --- Frame loop ------------------------------------------------------------
+    // ------------------------------------------------------------
+    // MEDIAPIPE INITIALIZATION
+    // ------------------------------------------------------------
 
-function drawFrame() {
-  const vw = sourceVideo.videoWidth;
-  const vh = sourceVideo.videoHeight;
-  const cw = stageCanvas.width;
-  const ch = stageCanvas.height;
+    async function initPoseLandmarker() {
+      if (poseLandmarker) {
+        return poseLandmarker;
+      }
 
-  if (vw && vh) {
-    // ---------------------------------------------------------------
-    // 1) Draw the raw video mirrored + center-cropped onto the canvas.
-    //
-    // We mirror by drawing the video flipped horizontally, then crop to
-    // a square by only blitting the middle slice of the (scaled) frame.
-    // Using source-rectangle crop (sx, sy, sw, sh) avoids signed-offset
-    // gymnastics and makes the behavior obvious.
-    // ---------------------------------------------------------------
-
-    // Scale factor so the video covers the square (cover, not contain).
-    const scale = Math.max(cw / vw, ch / vh);
-
-    // Size of the source rectangle we're going to sample from the video,
-    // in video pixel coordinates. It's the largest centered rectangle
-    // whose aspect ratio matches the canvas.
-    const srcW = cw / scale;
-    const srcH = ch / scale;
-    const sx = (vw - srcW) / 2;
-    const sy = (vh - srcH) / 2;
-
-    // Mirror the canvas horizontally, then draw the cropped source rect
-    // filling the entire canvas. Because the canvas is flipped, x=0 in
-    // canvas space corresponds to the right edge of the source rect.
-    ctx.save();
-    ctx.translate(cw, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(
-      sourceVideo,
-      sx, sy, srcW, srcH,     // source rect (un-mirrored video pixels)
-      0, 0, cw, ch            // dest rect (full canvas, then mirrored)
-    );
-    ctx.restore();
-
-    // ---------------------------------------------------------------
-    // 2) Pose detection on the raw video, then draw landmarks mirrored.
-    // ---------------------------------------------------------------
-    if (poseLandmarker && sourceVideo.currentTime !== lastVideoTime) {
-      lastVideoTime = sourceVideo.currentTime;
-      const results = poseLandmarker.detectForVideo(
-        sourceVideo,
-        performance.now()
+      const vision = await FilesetResolver.forVisionTasks(
+        `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}/wasm`
       );
 
-      if (results.landmarks && results.landmarks.length > 0) {
-        drawLowerBody(results.landmarks, cw, ch, vw, vh, sx, sy, srcW, srcH);
-        setMpStatus("Pose detected");
+      poseLandmarker = await PoseLandmarker.createFromOptions(
+        vision,
+        {
+          baseOptions: {
+            modelAssetPath: MODEL_URL,
+
+            // CPU is a compatible starting point across more devices.
+            delegate: "CPU"
+          },
+
+          runningMode: "VIDEO",
+          numPoses: 1,
+
+          minPoseDetectionConfidence: 0.5,
+          minPosePresenceConfidence: 0.5,
+          minTrackingConfidence: 0.7
+        }
+      );
+
+      return poseLandmarker;
+    }
+
+    // ------------------------------------------------------------
+    // GEOMETRY HELPERS
+    // ------------------------------------------------------------
+
+    function calculateAngle(a, b, c) {
+      // Calculate angle ABC, with B as the vertex.
+      const abx = a.x - b.x;
+      const aby = a.y - b.y;
+
+      const cbx = c.x - b.x;
+      const cby = c.y - b.y;
+
+      const dot = abx * cbx + aby * cby;
+
+      const magAB = Math.hypot(abx, aby);
+      const magCB = Math.hypot(cbx, cby);
+
+      if (magAB < 1e-6 || magCB < 1e-6) {
+        return null;
+      }
+
+      let cosine = dot / (magAB * magCB);
+
+      // Prevent floating-point errors outside [-1, 1].
+      cosine = Math.max(-1, Math.min(1, cosine));
+
+      return Math.acos(cosine) * (180 / Math.PI);
+    }
+
+    function isLandmarkVisible(landmark) {
+      return Boolean(
+        landmark &&
+        Number.isFinite(landmark.x) &&
+        Number.isFinite(landmark.y) &&
+        (
+          landmark.visibility === undefined ||
+          landmark.visibility >= MIN_VISIBILITY
+        )
+      );
+    }
+
+    function smoothPoint(index, rawX, rawY) {
+      if (!previousPoints[index]) {
+        previousPoints[index] = {
+          x: rawX,
+          y: rawY
+        };
+
+        return previousPoints[index];
+      }
+
+      previousPoints[index].x =
+        previousPoints[index].x * SMOOTHING +
+        rawX * (1 - SMOOTHING);
+
+      previousPoints[index].y =
+        previousPoints[index].y * SMOOTHING +
+        rawY * (1 - SMOOTHING);
+
+      return previousPoints[index];
+    }
+
+    // ------------------------------------------------------------
+    // LOWER-BODY DRAWING AND ANALYSIS
+    // ------------------------------------------------------------
+
+    function drawLowerBody(
+      landmarks,
+      cw,
+      ch,
+      vw,
+      vh,
+      sx,
+      sy,
+      srcW,
+      srcH
+    ) {
+      if (!landmarks || landmarks.length < 33) {
+        return;
+      }
+
+      // Convert normalized landmarks to the mirrored, cropped canvas.
+      function getPoint(index) {
+        const landmark = landmarks[index];
+
+        if (!isLandmarkVisible(landmark)) {
+          return null;
+        }
+
+        const videoX = landmark.x * vw;
+        const videoY = landmark.y * vh;
+
+        const u = (videoX - sx) / srcW;
+        const v = (videoY - sy) / srcH;
+
+        // Ignore landmarks outside the visible crop.
+        if (u < 0 || u > 1 || v < 0 || v > 1) {
+          return null;
+        }
+
+        const rawX = (1 - u) * cw;
+        const rawY = v * ch;
+
+        return smoothPoint(index, rawX, rawY);
+      }
+
+      // Collect points once so drawing and angle calculations
+      // use exactly the same coordinates.
+      const points = {};
+
+      for (const index of LOWER_BODY_INDICES) {
+        points[index] = getPoint(index);
+      }
+
+      // Draw skeleton connections.
+      ctx.strokeStyle = "#00ff88";
+      ctx.lineWidth = 4;
+      ctx.lineCap = "round";
+
+      for (const [i, j] of LOWER_BODY_CONNECTIONS) {
+        const p1 = points[i];
+        const p2 = points[j];
+
+        if (!p1 || !p2) {
+          continue;
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+
+      // Draw joints.
+      for (const index of LOWER_BODY_INDICES) {
+        const point = points[index];
+
+        if (!point) {
+          continue;
+        }
+
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 6, 0, 2 * Math.PI);
+
+        ctx.fillStyle = "#ff3366";
+        ctx.fill();
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      const leftHip = points[23];
+      const rightHip = points[24];
+
+      const leftKnee = points[25];
+      const rightKnee = points[26];
+
+      const leftAnkle = points[27];
+      const rightAnkle = points[28];
+
+      const allKneePointsValid = Boolean(
+        leftHip &&
+        leftKnee &&
+        leftAnkle &&
+        rightHip &&
+        rightKnee &&
+        rightAnkle
+      );
+
+      if (!allKneePointsValid) {
+        leftKneeAngle = null;
+        rightKneeAngle = null;
+
+        downFrames = 0;
+        upFrames = 0;
+
+        setMpStatus("Pose detected; knee landmarks unavailable.");
+
+        drawOverlay(null);
+        return;
+      }
+
+      leftKneeAngle = calculateAngle(
+        leftHip,
+        leftKnee,
+        leftAnkle
+      );
+
+      rightKneeAngle = calculateAngle(
+        rightHip,
+        rightKnee,
+        rightAnkle
+      );
+
+      if (
+        leftKneeAngle === null ||
+        rightKneeAngle === null
+      ) {
+        drawOverlay(null);
+        return;
+      }
+
+      const avgKneeAngle =
+        (leftKneeAngle + rightKneeAngle) / 2;
+
+      updateSquatCounter(avgKneeAngle);
+
+      // Draw angle labels.
+      ctx.font = "bold 20px Arial";
+      ctx.fillStyle = "#ffff00";
+
+      ctx.fillText(
+        `${Math.round(leftKneeAngle)}°`,
+        leftKnee.x + 12,
+        leftKnee.y
+      );
+
+      ctx.fillText(
+        `${Math.round(rightKneeAngle)}°`,
+        rightKnee.x + 12,
+        rightKnee.y
+      );
+
+      drawOverlay(avgKneeAngle);
+    }
+
+    // ------------------------------------------------------------
+    // SQUAT DETECTION
+    // ------------------------------------------------------------
+
+    function updateSquatCounter(avgKneeAngle) {
+      if (squatState === "UP") {
+        upFrames = 0;
+
+        if (avgKneeAngle < SQUAT_DOWN_ANGLE) {
+          downFrames++;
+        } else {
+          downFrames = 0;
+        }
+
+        if (downFrames >= REQUIRED_FRAMES) {
+          squatState = "DOWN";
+          downFrames = 0;
+        }
       } else {
-        setMpStatus("No pose detected");
+        downFrames = 0;
+
+        if (avgKneeAngle > STAND_UP_ANGLE) {
+          upFrames++;
+        } else {
+          upFrames = 0;
+        }
+
+        if (upFrames >= REQUIRED_FRAMES) {
+          squatState = "UP";
+          squatCount++;
+
+          upFrames = 0;
+        }
       }
     }
-  }
 
-  rafId = requestAnimationFrame(drawFrame);
-}
+    // ------------------------------------------------------------
+    // STATUS OVERLAY
+    // ------------------------------------------------------------
 
-// --- Camera lifecycle ------------------------------------------------------
+    function drawOverlay(avgKneeAngle) {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.72)";
+      ctx.fillRect(10, 10, 280, 145);
 
-async function openCamera() {
-  setStatus("Requesting camera access…");
-  setMpStatus("");
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 22px Arial";
 
-  if (!navigator.mediaDevices?.getUserMedia) {
-    setStatus("getUserMedia is not supported in this browser.", true);
-    return;
-  }
+      ctx.fillText(`Squats: ${squatCount}`, 22, 42);
+      ctx.fillText(`State: ${squatState}`, 22, 75);
 
-  // Load the model once, before opening the camera, so we don't flash
-  // "live" without landmarks. Subsequent opens reuse the loaded model.
-  if (!modelReady) {
-    setStatus("Loading pose model (first time only)…");
-    try {
-      await initPoseLandmarker();
-      modelReady = true;
-    } catch (err) {
-      console.error(err);
-      setStatus("Failed to load pose model. Check the console.", true);
-      return;
+      const angleText =
+        avgKneeAngle === null
+          ? "Angle: --"
+          : `Angle: ${Math.round(avgKneeAngle)}°`;
+
+      ctx.fillText(angleText, 22, 108);
+
+      ctx.font = "14px Arial";
+      ctx.fillStyle = "#00ff88";
+
+      ctx.fillText(
+        `L: ${leftKneeAngle === null ? "--" : Math.round(leftKneeAngle) + "°"}   ` +
+        `R: ${rightKneeAngle === null ? "--" : Math.round(rightKneeAngle) + "°"}`,
+        22,
+        135
+      );
     }
-  }
 
-  setStatus("Requesting camera access…");
+    // ------------------------------------------------------------
+    // VIDEO FRAME LOOP
+    // ------------------------------------------------------------
 
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: "user",
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-      audio: false,
+    function drawFrame() {
+      // A stopped or replaced camera session must not keep looping.
+      if (!stream || !sourceVideo.srcObject) {
+        rafId = null;
+        return;
+      }
+
+      const vw = sourceVideo.videoWidth;
+      const vh = sourceVideo.videoHeight;
+
+      const cw = stageCanvas.width;
+      const ch = stageCanvas.height;
+
+      if (vw > 0 && vh > 0) {
+        // Center-crop the source to match the canvas aspect ratio.
+        const scale = Math.max(cw / vw, ch / vh);
+
+        const srcW = cw / scale;
+        const srcH = ch / scale;
+
+        const sx = (vw - srcW) / 2;
+        const sy = (vh - srcH) / 2;
+
+        // Draw mirrored webcam video.
+        ctx.save();
+        ctx.translate(cw, 0);
+        ctx.scale(-1, 1);
+
+        ctx.drawImage(
+          sourceVideo,
+          sx, sy, srcW, srcH,
+          0, 0, cw, ch
+        );
+
+        ctx.restore();
+
+        // Detect only once per new video frame, but redraw the
+        // latest landmarks every animation frame.
+        if (
+          poseLandmarker &&
+          sourceVideo.currentTime !== lastVideoTime
+        ) {
+          lastVideoTime = sourceVideo.currentTime;
+
+          try {
+            const results = poseLandmarker.detectForVideo(
+              sourceVideo,
+              performance.now()
+            );
+
+            latestLandmarks =
+              results.landmarks?.[0] ?? null;
+
+            if (latestLandmarks) {
+              setMpStatus("Pose detected.");
+            } else {
+              setMpStatus("No pose detected.");
+
+              leftKneeAngle = null;
+              rightKneeAngle = null;
+
+              downFrames = 0;
+              upFrames = 0;
+            }
+          } catch (error) {
+            console.error("Pose detection failed:", error);
+
+            latestLandmarks = null;
+
+            leftKneeAngle = null;
+            rightKneeAngle = null;
+
+            setMpStatus("Pose detection error.", true);
+          }
+        }
+
+        // Draw the most recent pose even when the camera frame
+        // has not advanced since the previous animation frame.
+        if (latestLandmarks) {
+          drawLowerBody(
+            latestLandmarks,
+            cw,
+            ch,
+            vw,
+            vh,
+            sx,
+            sy,
+            srcW,
+            srcH
+          );
+        } else {
+          drawOverlay(null);
+        }
+      }
+
+      rafId = requestAnimationFrame(drawFrame);
+    }
+
+    // ------------------------------------------------------------
+    // CAMERA CONTROLS
+    // ------------------------------------------------------------
+
+    async function openCamera() {
+      if (cameraStarting || stream) {
+        return;
+      }
+
+      cameraStarting = true;
+      setCameraUi(false);
+
+      const session = ++cameraSession;
+
+      setStatus("Loading pose model...");
+      setMpStatus("Initializing...");
+
+      try {
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error(
+            "Camera access is unavailable. Use localhost or HTTPS."
+          );
+        }
+
+        await initPoseLandmarker();
+
+        // Do not open a camera if the user stopped the operation
+        // while the model was loading.
+        if (session !== cameraSession) {
+          return;
+        }
+
+        modelReady = true;
+
+        setStatus("Requesting camera access...");
+
+        const newStream =
+          await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: "user",
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          });
+
+        if (session !== cameraSession) {
+          newStream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        stream = newStream;
+        sourceVideo.srcObject = stream;
+
+        await new Promise((resolve, reject) => {
+          if (sourceVideo.videoWidth > 0) {
+            resolve();
+            return;
+          }
+
+          sourceVideo.onloadedmetadata = resolve;
+
+          sourceVideo.onerror = () => {
+            reject(new Error("Could not load the camera video."));
+          };
+        });
+
+        if (session !== cameraSession) {
+          return;
+        }
+
+        await sourceVideo.play();
+
+        if (session !== cameraSession) {
+          return;
+        }
+
+        lastVideoTime = -1;
+        latestLandmarks = null;
+        previousPoints = {};
+
+        setCameraUi(true);
+        setStatus("Camera is live.");
+        setMpStatus("Searching for pose...");
+
+        drawFrame();
+
+      } catch (error) {
+        console.error("Camera initialization failed:", error);
+
+        if (session === cameraSession) {
+          let message = error.message || "Could not start the camera.";
+
+          if (error.name === "NotAllowedError") {
+            message = "Camera permission denied.";
+          } else if (error.name === "NotFoundError") {
+            message = "No camera device found.";
+          } else if (error.name === "NotReadableError") {
+            message = "Camera is in use by another application.";
+          }
+
+          setStatus(message, true);
+          closeCamera({ silent: true });
+        }
+
+      } finally {
+        cameraStarting = false;
+
+        if (stream) {
+          setCameraUi(true);
+        } else {
+          setCameraUi(false);
+        }
+      }
+    }
+
+    function closeCamera({ silent = false } = {}) {
+      // Invalidate any camera startup still in progress.
+      cameraSession++;
+
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+
+      sourceVideo.onloadedmetadata = null;
+      sourceVideo.onerror = null;
+      sourceVideo.srcObject = null;
+
+      ctx.clearRect(
+        0,
+        0,
+        stageCanvas.width,
+        stageCanvas.height
+      );
+
+      previousPoints = {};
+      latestLandmarks = null;
+      lastVideoTime = -1;
+
+      leftKneeAngle = null;
+      rightKneeAngle = null;
+
+      downFrames = 0;
+      upFrames = 0;
+
+      // Keep the count and model so the session can resume.
+      setCameraUi(false);
+      setMpStatus("Waiting.");
+
+      if (!silent) {
+        setStatus("Camera is off.");
+      }
+    }
+
+    // ------------------------------------------------------------
+    // EVENT LISTENERS
+    // ------------------------------------------------------------
+
+    openBtn.addEventListener("click", openCamera);
+
+    closeBtn.addEventListener("click", () => {
+      closeCamera();
     });
 
-    sourceVideo.srcObject = stream;
+    window.addEventListener("pagehide", () => {
+      closeCamera({ silent: true });
 
-    await new Promise((resolve) => {
-      sourceVideo.onloadedmetadata = () => resolve();
+      if (poseLandmarker) {
+        poseLandmarker.close();
+        poseLandmarker = null;
+        modelReady = false;
+      }
     });
 
-    await sourceVideo.play();
-
-    setCameraUi(true);
-    setStatus("Camera is live.");
-    drawFrame();
-  } catch (err) {
-    let msg = "Could not access the camera.";
-    if (err.name === "NotAllowedError") msg = "Camera permission denied.";
-    else if (err.name === "NotFoundError") msg = "No camera device found.";
-    else if (err.name === "NotReadableError")
-      msg = "Camera is in use by another application.";
-    setStatus(msg, true);
-    closeCamera({ silent: true });
-  }
-}
-
-function closeCamera({ silent = false } = {}) {
-  if (rafId !== null) {
-    cancelAnimationFrame(rafId);
-    rafId = null;
-  }
-
-  if (stream) {
-    stream.getTracks().forEach((track) => track.stop());
-    stream = null;
-  }
-
-  sourceVideo.srcObject = null;
-  ctx.clearRect(0, 0, stageCanvas.width, stageCanvas.height);
-  setMpStatus("");
-  setCameraUi(false);
-  if (!silent) setStatus("Camera is off.");
-}
-
-// --- Wire up ---------------------------------------------------------------
-
-openBtn.addEventListener("click", openCamera);
-closeBtn.addEventListener("click", () => closeCamera());
-
-window.addEventListener("pagehide", () => closeCamera({ silent: true }));
-
-// Initial UI state
-setCameraUi(false);
+    // Initial interface state.
+    setCameraUi(false);
