@@ -622,6 +622,16 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 0 3px var(--green-soft);
 }
 
+.field__input--select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8' width='12' height='8'%3E%3Cpath fill='%235A6B62' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+  cursor: pointer;
+}
+
 .btn--block {
   width: 100%;
   text-align: center;
