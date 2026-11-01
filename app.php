@@ -1,3 +1,10 @@
+<?php
+require 'auth_helper.php';
+require_login();   // kicks unauthenticated users back to login.php
+
+$username = $_SESSION['user'] ?? 'guest';
+?>
+<!DOCTYPE html>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,8 +32,8 @@
       </a>
       <div class="site-header__user">
         <span class="site-header__user-label">Signed in as</span>
-        <span class="site-header__user-name" id="currentUser">demo01</span>
-        <a href="landingpage.html" class="btn btn--secondary btn--sm">Log out</a>
+        <span class="site-header__user-name" id="currentUser"><?= e($username) ?></span>
+        <a href="logout.php" class="btn btn--secondary btn--sm">Log out</a>
       </div>
     </div>
   </header>

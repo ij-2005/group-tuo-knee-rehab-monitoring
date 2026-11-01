@@ -14,3 +14,11 @@ npm-debug.log*
 # Logs / env
 *.log
 .env
+
+# Runtime data — never commit
+users.json
+auth.log
+
+# PHP session files (if stored locally)
+*.session
+sess_*

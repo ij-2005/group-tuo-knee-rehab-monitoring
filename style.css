@@ -651,3 +651,24 @@ a:hover { text-decoration: underline; }
 .login__back a {
   color: var(--green);
 }
+
+/* ---- 2FA / auth additions ---- */
+.form-error {
+  background: #fdecea;
+  color: #a42a1f;
+  border: 1px solid #f5c6c2;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+
+.form-info {
+  background: #e7f4ec;
+  color: #1b5e33;
+  border: 1px solid #b9dfc7;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin: 0 0 16px;
+  font-size: 14px;
+}
