@@ -487,7 +487,7 @@ a:hover { text-decoration: underline; }
 /* Square stage that holds the canvas. */
 .stage {
   position: relative;
-  width: 640px;
+  width: 100%;
   height: 480px;
   max-width: 100%;
   aspect-ratio: 4 / 3;
@@ -672,3 +672,342 @@ a:hover { text-decoration: underline; }
   margin: 0 0 16px;
   font-size: 14px;
 }
+
+/* ==========================================================================
+   7. SESSION LAYOUT (two columns: stage + feedback panel)
+   ========================================================================== */
+
+/* Widen the app shell to fit the two-column layout */
+.app {
+  max-width: 1120px;
+}
+
+/* Two-column grid: stage left, panel right */
+.session {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+  align-items: start;
+}
+
+.session__stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.session__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: sticky;
+  top: 88px;
+}
+
+/* ---- Panel cards ---- */
+
+.panel-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel-card--count {
+  align-items: center;
+  gap: 4px;
+  padding: 20px 16px;
+}
+
+.panel-card__label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.panel-card__number {
+  font-size: 3.5rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Panel rows ---- */
+
+.panel-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.panel-row__label {
+  color: var(--text-muted);
+}
+
+.panel-row__value {
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ---- Live feedback line ---- */
+
+.feedback {
+  background: var(--gold-soft);
+  border: 1px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 16px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #7a5400;
+  text-align: center;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+/* ---- Rep-complete flash ---- */
+
+.flash {
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-align: center;
+  border: 1px solid var(--green);
+  background: var(--green-soft);
+  color: var(--green);
+  animation: flash-in 0.2s ease;
+}
+
+.flash.is-hidden { display: none; }
+
+.flash--good { border-color: var(--green); background: var(--green-soft); color: var(--green); }
+.flash--fair { border-color: var(--gold);  background: var(--gold-soft);  color: #7a5400; }
+.flash--poor { border-color: var(--danger); background: #FBEAE8; color: var(--danger); }
+
+@keyframes flash-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Responsive: stack under 860px ---- */
+
+@media (max-width: 860px) {
+  .session {
+    grid-template-columns: 1fr;
+  }
+  .session__panel {
+    position: static;
+    max-width: 520px;
+    margin: 0 auto;
+    width: 100%;
+  }
+}
+/* ---- Rep evaluation card ---- */
+
+.eval-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.eval-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.eval-card__title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.eval-card__status {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-muted);
+}
+
+.eval-card__status[data-status="counting"] {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.eval-card__status[data-status="rejected"] {
+  background: #FBEAE8;
+  color: var(--danger);
+}
+
+.eval-card__status[data-status="completed"] {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.eval-card__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+}
+
+.eval-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.eval-row--overall {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  margin-top: 2px;
+  font-weight: 700;
+}
+
+.eval-row__label { color: var(--text-muted); }
+.eval-row__value { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.eval-card__angles {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+
+.eval-card__angles span { font-variant-numeric: tabular-nums; }
+
+.eval-card__reason {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--danger);
+  min-height: 1em;
+}
+.eval-card__reason:empty { display: none; }
+
+/* ---- Target + progress ---- */
+
+.panel-card--target { gap: 8px; }
+
+.target-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.target-select {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.progress {
+  height: 8px;
+  background: var(--bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress__bar {
+  height: 100%;
+  width: 0%;
+  background: var(--green);
+  border-radius: 999px;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+.progress__bar.is-complete {
+  background: var(--green);
+}
+
+.progress-text {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.progress-status {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.progress-status.is-complete {
+  color: var(--green);
+}
+
+/* ---- Last rep comment ---- */
+
+.last-comment {
+  background: var(--green-soft);
+  border: 1px solid var(--green);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.last-comment.is-hidden { display: none; }
+
+.last-comment__label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--green);
+}
+
+.last-comment__text {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---- Session complete banner ---- */
+
+.session-complete {
+  background: var(--green);
+  color: #fff;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  text-align: center;
+  font-size: 0.95rem;
+  animation: flash-in 0.3s ease;
+}
+
+.session-complete.is-hidden { display: none; }
